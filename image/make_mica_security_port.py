@@ -6,7 +6,7 @@ Only the modified vendor mount omits its obsolete stock AVB hash. Other mounts
 retain original AVB; encryption and global SELinux enforcement remain unchanged.
 """
 from pathlib import Path
-import hashlib,io,json,os,stat,struct,subprocess,sys,tarfile
+import hashlib,io,json,os,stat,struct,subprocess,sys,tarfile,zipfile
 from cpio_tools import read,write
 from erofs_metadata import metadata
 from relocate_vendor import relocate
@@ -145,6 +145,18 @@ if '--host-input' in sys.argv:
 on property:sys.boot_completed=1
     start vm-input
 ''','vendor_configs_file')
+if '--mac-keyboard' in sys.argv:
+ assert GUEST is not None, 'GOOGLEBOOK_GUEST_DIR must point to the built guest components'
+ keyboard_apk=GUEST/'GooglebookKeyboardLayouts.apk'
+ assert keyboard_apk.is_file(), f'missing keyboard layout provider: {keyboard_apk}'
+ add('app/GooglebookKeyboardLayouts/GooglebookKeyboardLayouts.apk',keyboard_apk.read_bytes(),'vendor_app_file')
+ # Select the Mac AZERTY character map for QEMU's stable USB keyboard VID/PID
+ # at the Android input-device layer. The selectable provider remains useful
+ # for Settings' preview and for user-level layout selection.
+ with zipfile.ZipFile(keyboard_apk) as apk:
+  keyboard_kcm=apk.read('res/raw/keyboard_layout_french_mac.kcm')
+ add('usr/keychars/Vendor_0627_Product_0001.kcm',keyboard_kcm,'vendor_configs_file')
+ new_dirs+=['app','app/GooglebookKeyboardLayouts','usr/keychars']
 if '--stress-test' in sys.argv:
  # Test images only: drive theme switches and app launches after boot (see guest_stress_test.sh).
  add('bin/vm-stress-test.sh',(R/'scripts/guest_stress_test.sh').read_bytes(),'vendor_shell_exec',0o755)
@@ -267,11 +279,15 @@ for pass in 1 2 3 4 5 6 7 8; do
 done
 ''','vendor_shell_exec',0o755)
 with tarfile.open(O/'overlay.tar','w',format=tarfile.PAX_FORMAT) as t:
- dirs=['.','bin','bin/hw','etc','etc/init','etc/init/hw','etc/selinux','etc/vintf','etc/vintf/manifest','lib64','lib64/hw','lib64/egl','lib64/vm_keymint']
+ dirs=['.','bin','bin/hw','etc','etc/init','etc/init/hw','etc/selinux','etc/vintf','etc/vintf/manifest','lib64','lib64/hw','lib64/egl','lib64/vm_keymint','usr']
  if '--audio' in sys.argv:dirs.append('apex')
  dirs+=extra_dirs+new_dirs[1:]
  for n in dirs:
-  m=metadata(raw,'/'+n if n!='.' else '/',off) if n not in new_dirs else {'mode':0o40755,'uid':0,'gid':2000,'mtime':1230768000,'xattrs':{'security.selinux':b'u:object_r:vendor_file:s0' if n.startswith('lib64') else b'u:object_r:vendor_configs_file:s0'}}
+  if n not in new_dirs:
+   m=metadata(raw,'/'+n if n!='.' else '/',off)
+  else:
+   label='vendor_app_file' if n=='app' or n.startswith('app/') else ('vendor_file' if n.startswith('lib64') else 'vendor_configs_file')
+   m={'mode':0o40755,'uid':0,'gid':2000,'mtime':1230768000,'xattrs':{'security.selinux':f'u:object_r:{label}:s0'.encode()}}
   ti=tarfile.TarInfo(n);ti.type=tarfile.DIRTYPE;ti.mode=m['mode']&0o7777;ti.uid=m['uid'];ti.gid=m['gid'];ti.mtime=m['mtime']
   ti.pax_headers={} if n=='.' else {'SCHILY.xattr.'+k:v.decode() for k,v in m['xattrs'].items()};t.addfile(ti)
  for n,(b,label,mode) in files.items():

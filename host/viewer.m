@@ -8,14 +8,18 @@
 #import <netinet/tcp.h>
 #import <arpa/inet.h>
 
+// macOS virtual keycodes to QEMU AT set-1 scancodes. CocoaSpice encodes E0-prefixed
+// scancodes as 0x100 | code; the French (Mac) KCM handles the character layer in Android.
 static unsigned short scan[128] = {
- [0]=0x1e,[1]=0x1f,[2]=0x20,[3]=0x21,[4]=0x23,[5]=0x22,[6]=0x2c,[7]=0x2d,[8]=0x2e,[9]=0x2f,[11]=0x30,
+ [0]=0x1e,[1]=0x1f,[2]=0x20,[3]=0x21,[4]=0x23,[5]=0x22,[6]=0x2c,[7]=0x2d,[8]=0x2e,[9]=0x2f,[10]=0x56,[11]=0x30,
  [12]=0x10,[13]=0x11,[14]=0x12,[15]=0x13,[16]=0x15,[17]=0x14,[18]=2,[19]=3,[20]=4,[21]=5,[22]=7,[23]=6,
  [24]=0x0d,[25]=0x0a,[26]=8,[27]=0x0c,[28]=9,[29]=0x0b,[30]=0x1b,[31]=0x18,[32]=0x16,[33]=0x1a,[34]=0x17,[35]=0x19,
  [36]=0x1c,[37]=0x26,[38]=0x24,[39]=0x28,[40]=0x25,[41]=0x27,[42]=0x2b,[43]=0x33,[44]=0x35,[45]=0x31,[46]=0x32,[47]=0x34,
  [48]=0x0f,[49]=0x39,[50]=0x29,[51]=0x0e,[53]=1,[55]=0x15b,[54]=0x15c,[56]=0x2a,[60]=0x36,[58]=0x38,[61]=0x138,[59]=0x1d,[62]=0x11d,
  [65]=0x53,[67]=0x37,[69]=0x4e,[75]=0x135,[76]=0x11c,[78]=0x4a,[82]=0x52,[83]=0x4f,[84]=0x50,[85]=0x51,[86]=0x4b,[87]=0x4c,[88]=0x4d,[89]=0x47,[91]=0x48,[92]=0x49,
- [96]=0x3f,[97]=0x40,[98]=0x41,[99]=0x3d,[100]=0x42,[101]=0x43,[103]=0x57,[109]=0x44,[111]=0x58,[115]=0x147,[116]=0x149,[117]=0x153,[118]=0x3e,[119]=0x14f,[120]=0x3c,[121]=0x151,[122]=0x3b,[123]=0x14b,[124]=0x14d,[125]=0x150,[126]=0x148
+ [64]=0x103,[72]=0x130,[73]=0x12e,[74]=0x120,[79]=0x177,[80]=0x104,[90]=0x5a,
+ [96]=0x3f,[97]=0x40,[98]=0x41,[99]=0x3d,[100]=0x42,[101]=0x43,[103]=0x57,[105]=0x5d,[106]=0x55,[107]=0x5e,[109]=0x44,[111]=0x58,[113]=0x5f,[114]=0x175,
+ [115]=0x147,[116]=0x149,[117]=0x153,[118]=0x3e,[119]=0x14f,[120]=0x3c,[121]=0x151,[122]=0x3b,[123]=0x14b,[124]=0x14d,[125]=0x150,[126]=0x148
 };
 @interface VMView : MTKView
 - (void)setHostCursorHidden:(BOOL)hidden;
@@ -44,6 +48,7 @@ static unsigned short scan[128] = {
 - (void)steerToTarget;
 - (void)releaseCapture;
 - (void)resync;
+- (void)syncCapsLockFromFlags:(NSEventModifierFlags)flags;
 @end
 @implementation VMView
 - (BOOL)acceptsFirstResponder{return YES;}
@@ -89,7 +94,14 @@ static unsigned short scan[128] = {
 - (void)mouseExited:(NSEvent *)e {if(self.absolute){self.inside=NO;[self setHostCursorHidden:NO];self.sendLine(@"X");return;}if(!self.seamless)return;self.inside=NO;[self setHostCursorHidden:NO];}
 - (void)capture {
  if(self.seamless||!self.relativeAllowed)return;
- if(!self.captured && self.input){self.captured=YES;[self.window makeFirstResponder:self];[self.input requestMouseMode:YES];CGAssociateMouseAndMouseCursorPosition(false);[NSCursor hide];self.window.subtitle=@"Mouse captured • ⌃⌥ releases";}
+ if(!self.captured && self.input){self.captured=YES;[self.window makeFirstResponder:self];[self syncCapsLockFromFlags:NSEvent.modifierFlags];[self.input requestMouseMode:YES];CGAssociateMouseAndMouseCursorPosition(false);[NSCursor hide];self.window.subtitle=@"Mouse captured • ⌃⌥ releases";}
+}
+- (void)syncCapsLockFromFlags:(NSEventModifierFlags)flags {
+ if(!self.input||![self live])return;
+ CSInputKeyLock current=self.input.keyLock,locks=current;
+ if(flags&NSEventModifierFlagCapsLock)locks|=kCSInputKeyLockCaps;
+ else locks&=~kCSInputKeyLockCaps;
+ if(locks!=current)self.input.keyLock=locks;
 }
 - (void)releaseCapture {
  [self.input releaseKeys];
@@ -137,7 +149,9 @@ static unsigned short scan[128] = {
 - (void)flagsChanged:(NSEvent *)e {
  // Control+Option releases a captured mouse (the same chord UTM uses), so Esc reaches the guest.
  if(self.captured&&(e.modifierFlags&NSEventModifierFlagControl)&&(e.modifierFlags&NSEventModifierFlagOption)){[self releaseCapture];return;}
- if(![self live])return;NSUInteger flag=0;switch(e.keyCode){case 56:case 60:flag=NSEventModifierFlagShift;break;case 59:case 62:flag=NSEventModifierFlagControl;break;case 58:case 61:flag=NSEventModifierFlagOption;break;case 54:case 55:flag=NSEventModifierFlagCommand;break;}if(flag)[self.input sendKey:(e.modifierFlags&flag)?kCSInputKeyPress:kCSInputKeyRelease code:scan[e.keyCode]];}
+ if(![self live])return;
+ if(e.keyCode==57){[self syncCapsLockFromFlags:e.modifierFlags];return;}
+ NSUInteger flag=0;switch(e.keyCode){case 56:case 60:flag=NSEventModifierFlagShift;break;case 59:case 62:flag=NSEventModifierFlagControl;break;case 58:case 61:flag=NSEventModifierFlagOption;break;case 54:case 55:flag=NSEventModifierFlagCommand;break;}if(flag)[self.input sendKey:(e.modifierFlags&flag)?kCSInputKeyPress:kCSInputKeyRelease code:scan[e.keyCode]];}
 @end
 
 @interface App : NSObject<NSApplicationDelegate,NSWindowDelegate,CSConnectionDelegate>
@@ -418,7 +432,7 @@ static unsigned short scan[128] = {
 - (void)applicationWillTerminate:(NSNotification *)n{[self.view releaseCapture];[self.connection disconnect];}
 - (void)spiceConnected:(CSConnection *)c{fprintf(stderr,"SPICE connected\n");}
 - (void)spiceDisconnected:(CSConnection *)c{dispatch_async(dispatch_get_main_queue(),^{[self.view releaseCapture];self.window.subtitle=@"VM disconnected";});}
-- (void)spiceInputAvailable:(CSConnection *)c input:(CSInput *)i{dispatch_async(dispatch_get_main_queue(),^{self.view.input=i;[i requestMouseMode:YES];});}
+- (void)spiceInputAvailable:(CSConnection *)c input:(CSInput *)i{dispatch_async(dispatch_get_main_queue(),^{self.view.input=i;[self.view syncCapsLockFromFlags:NSEvent.modifierFlags];[i requestMouseMode:YES];});}
 - (void)spiceInputUnavailable:(CSConnection *)c input:(CSInput *)i{dispatch_async(dispatch_get_main_queue(),^{[self.view releaseCapture];self.view.input=nil;});}
 - (void)spiceError:(CSConnection *)c code:(CSConnectionError)code message:(NSString *)message{fprintf(stderr,"SPICE error %s\n",message.UTF8String);dispatch_async(dispatch_get_main_queue(),^{self.window.subtitle=message;});}
 - (void)spiceDisplayCreated:(CSConnection *)c display:(CSDisplay *)d{dispatch_async(dispatch_get_main_queue(),^{self.display=d;[d addRenderer:self.renderer];[self fit];self.window.subtitle=self.view.seamless?@"⌘V pastes into guest • ⌃⌘F full screen • ⌃⌘R re-syncs pointer":@"Click to capture • ⌃⌥ releases";fprintf(stderr,"DISPLAY created %.0fx%.0f GL=%d\n",d.displaySize.width,d.displaySize.height,d.isGLEnabled);});}

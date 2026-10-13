@@ -85,6 +85,9 @@ ninja -j "$JOBS" -C "$WORK/build/mesa-venus" src/virtio/vulkan/libvulkan_virtio.
   || { tail -20 "$WORK/build/mesa-venus.build.log"; die "Mesa Venus build failed"; }
 cp "$WORK/build/mesa-venus/src/virtio/vulkan/libvulkan_virtio.so" "$WORK/guest/libvulkan_virtio.so"
 
+say "French (Mac) keyboard layout provider"
+"$ROOT/guest/keyboard/build.sh"
+
 say "Pointer and clipboard helper"
 rm -rf "$WORK/build/input"; mkdir -p "$WORK/build/input"
 "$JAVA_HOME/bin/javac" -source 11 -target 11 -Xlint:-options -cp "$ANDROID_JAR" -d "$WORK/build/input" "$ROOT/guest/input/vm/Input.java"

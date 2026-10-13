@@ -6,8 +6,10 @@
 no_running_vm
 need brew "https://brew.sh"; need lz4 "brew install lz4"
 GUEST="${GOOGLEBOOK_GUEST_DIR:-$WORK/guest}"; TOOLS="${GOOGLEBOOK_TOOLS_DIR:-$WORK/tools}"
+"$ROOT/guest/keyboard/build.sh"
 for f in "$WORK/googlebook/mica-recovery.raw" "$WORK/cuttlefish/manifest.json" "$GUEST/libvulkan_virtio.so" \
-         "$WORK/cuttlefish/bluetooth/android.hardware.bluetooth-service.cuttlefish" "$GUEST/mesa-runtime/libgallium_dri.so" "$GUEST/vm-input.jar" "$TOOLS/guest_graphics_memfd_policy"; do
+         "$WORK/cuttlefish/bluetooth/android.hardware.bluetooth-service.cuttlefish" "$GUEST/mesa-runtime/libgallium_dri.so" \
+         "$GUEST/vm-input.jar" "$GUEST/GooglebookKeyboardLayouts.apk" "$TOOLS/guest_graphics_memfd_policy"; do
   [ -e "$f" ] || die "missing input: $f"
 done
 IMAGE_DIR="${GBOS_IMAGE_DIR:-$WORK/image}"
@@ -38,7 +40,7 @@ python3 scripts/make_mica_gpu_initrd.py >>"$WORK/build-image.log" 2>&1 || { tail
 say "Vendor overlay, policy and services"
 python3 scripts/make_mica_security_port.py base --graphics --audio --vm-compat --locksettings --offline-desktop \
   --quiet-diagnostics --runtime-diagnostics --crash-diagnostics --venus --vulkan-desktop --quiet-absent-hardware \
-  --host-control --host-input --bluetooth ${GBOS_IMAGE_FLAGS:-} >>"$WORK/build-image.log" 2>&1 || { tail -30 "$WORK/build-image.log"; die "image assembly failed"; }
+  --host-control --host-input --bluetooth --mac-keyboard ${GBOS_IMAGE_FLAGS:-} >>"$WORK/build-image.log" 2>&1 || { tail -30 "$WORK/build-image.log"; die "image assembly failed"; }
 
 say "User data area and extra kernel modules"
 { python3 scripts/expand_mica_userdata.py artifacts/mica/base/googlebook.raw \

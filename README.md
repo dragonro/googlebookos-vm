@@ -62,11 +62,15 @@ Quitting (or closing the window) shuts Android down properly. Your data lives in
 
 **Settings** (`⌘,`) has the pointer mode, resolution, memory, CPU cores, and toggles for networking, audio and Bluetooth. Pointer mode changes right away; everything else is a VM option, so it applies the next time you start it.
 
+### Mac keyboard layout
+
+The VM applies the French (Mac) key map directly to QEMU's USB keyboard, including after reboot; the profile is also available in **Settings → System → Keyboard → Physical keyboard** for preview and selection. On macOS, select the **French** input source while using this profile. The layout matches its letters, symbols, Option layers, dead accents, and Caps Lock behavior; the viewer also forwards the Mac ISO key, function keys, media keys, and modifiers.
+
 Resolution defaults to your display's native pixels at 16:10. On a notched MacBook that's exactly the area below the notch, so full screen is pixel-for-pixel.
 
 ### Updating
 
-After a `git pull`, rebuild the app and refresh the system part of your disk. Quit the VM first.
+After a `git pull`, rebuild the app and refresh the system part of your disk. Quit the VM first. `update-image.sh` rebuilds the keyboard provider from source as part of the image refresh; run `build-guest.sh` as well when other guest components have changed.
 
 ```bash
 ./build-host.sh
@@ -97,6 +101,7 @@ The image starts as Google's unmodified recovery download. We don't touch the sy
 - **Three extra SELinux rules**, all narrowly about graphics buffer sharing. SELinux stays enforcing.
 - **Cuttlefish's Bluetooth service** instead of the Qualcomm one, talking to a virtual radio on your Mac over a virtual serial port. The radio listens on `127.0.0.1` with no password, so another program on your Mac could join it and show up as a nearby Bluetooth device. Turn Bluetooth off in Settings if that bothers you.
 - **A helper running as the Android shell user** that takes pointer and clipboard input from the viewer. It only accepts a host that presents a random per-boot token, and it listens to nothing — it connects out to `127.0.0.1` on your Mac.
+- **A French (Mac) keyboard layout provider** so Android can apply the Mac AZERTY symbol and modifier layers to QEMU's USB keyboard.
 
 So: treat it like a dev VM. It's great for poking at the OS. I wouldn’t daily drive it or anything, but I’m sure some freaks (laudatory) will try.
 
@@ -126,12 +131,13 @@ The rest is plumbing: `fetch.sh` gets the images, `build-host.sh` builds the pat
 install.sh          runs the four steps below in order
 fetch.sh            downloads + verifies the Googlebook image, Cuttlefish, and UTM
 build-host.sh       patched virglrenderer, QEMU launcher, viewer
-build-guest.sh      Mesa (GLES + Vulkan), pointer helper, SELinux policy tool
+build-guest.sh      Mesa (GLES + Vulkan), pointer helper, French (Mac) layout, SELinux policy tool
 build-image.sh      assembles the bootable disk
 update-image.sh     refreshes an existing disk after a git pull, keeping your data
 run/                VM runner and a command-line launcher (the app bundles these)
 image/              the scripts that rebuild the vendor partition
 guest/  host/       sources for the bits we wrote
+guest/keyboard/     Android French (Mac) keyboard layout provider
 patches/            our changes to virglrenderer, Mesa and CocoaSpice
 ```
 
