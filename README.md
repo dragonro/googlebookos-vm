@@ -20,6 +20,14 @@ Then open the app it built:
 open "work/host/Googlebook VM.app"
 ```
 
+Or use the start/stop menu from Terminal:
+
+```bash
+./googlebook-menu.sh
+```
+
+Choose **Start VM** to open the desktop or **Stop VM** to shut Android down cleanly.
+
 Drag that into your Dock if you want it there. It boots the VM when you open it and shuts Android down properly when you quit.
 
 The first boot takes about 45 seconds on a M5 MacBook. If you land on a user picker, click **User** — there's no password.

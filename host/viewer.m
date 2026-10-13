@@ -122,7 +122,9 @@ static unsigned short scan[128] = {
   if(!NSPointInRect([self convertPoint:e.locationInWindow fromView:nil],self.bounds)){if(self.inside){self.inside=NO;[self setHostCursorHidden:NO];self.sendLine(@"X");}return;}
   self.inside=YES;if(self.guestCursor)[self setHostCursorHidden:YES];CGPoint g=[self guestPoint:e];self.sendLine([NSString stringWithFormat:@"M %.1f %.1f",g.x,g.y]);return;}
  if(self.seamless){if(self.inside)[self steer:e];return;}
- if(!self.captured)return;CGFloat scale=MIN(self.bounds.size.width/self.guestSize.width,self.bounds.size.height/self.guestSize.height);if(scale<=0)scale=1;[self.input sendMouseMotion:self.buttons relativePoint:CGPointMake(e.deltaX/scale,e.deltaY/scale)];
+ // Captured input is relative: scaling it by the rendered guest size makes
+ // movement 2–3x faster on Retina displays. Keep Mac's relative deltas intact.
+ if(!self.captured)return;[self.input sendMouseMotion:self.buttons relativePoint:CGPointMake(e.deltaX,e.deltaY)];
 }
 - (void)mouseDragged:(NSEvent *)e {[self mouseMoved:e];}
 - (void)rightMouseDragged:(NSEvent *)e {[self mouseMoved:e];}
